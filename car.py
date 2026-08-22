@@ -1,120 +1,119 @@
-import streamlit as st
+import tkinter as tk
+from tkinter import ttk
 
-# إعدادات الصفحة
-st.set_page_config(page_title="محاكاة القيادة باليد المتقدمة", page_icon="🚗", layout="centered")
+class CarSimulator:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("نموذج محاكاة نظام قيادة يدوي")
+        self.root.geometry("500x450")
 
-st.title("🚗 محاكاة نظام القيادة اليدوية (Drive-by-Wire)")
-st.write("استخدمي المُنزلقات (Sliders) بالأسفل للتحكم في السيارة كأنك تمسكين المقود بيدك.")
+        self.current_speed = 0.0
+        self.max_speed = 200.0
+        self.throttle_value = 0.0
+        self.brake_value = 0.0
+        self.is_running = True
 
-# تهيئة المتغيرات في حالة الجلسة (Session State)
-if 'speed' not in st.session_state:
-    st.session_state.speed = 0.0
-if 'steering_angle' not in st.session_state:
-    st.session_state.steering_angle = 0  # من -100 (يسار) إلى +100 (يمين)
-if 'throttle_input' not in st.session_state:
-    st.session_state.throttle_input = 0 # قيمة منزلق البنزين
-if 'brake_input' not in st.session_state:
-    st.session_state.brake_input = 0 # قيمة منزلق الفرامل
+        # --- عناصر الواجهة ---
+        
+        # عنوان
+        lbl_title = ttk.Label(root, text="لوحة تحكم القيادة اليدوية (Drive-by-Wire)", font=("Helvetica", 16, "bold"))
+        lbl_title.pack(pady=15)
 
-# --- لوحة العدادات ---
-st.markdown("---")
-col1, col2, col3 = st.columns(3)
+        # منطقة عرض السرعة (Dashboard)
+        dashboard_frame = ttk.LabelFrame(root, text="معلومات السيارة", padding=10)
+        dashboard_frame.pack(fill="x", padx=20, pady=10)
 
-with col1:
-    # تحويل قيمة زاوية الدركسون لعرضها كنص
-    steer_display = "مستقيم ⬆️"
-    if st.session_state.steering_angle < 0:
-        steer_display = f"⬅️ يسار ({abs(st.session_state.steering_angle)})"
-    elif st.session_state.steering_angle > 0:
-        steer_display = f"➡️ يمين ({st.session_state.steering_angle})"
-    st.metric(label="وضعية الدركسون", value=steer_display)
+        self.lbl_speed = ttk.Label(dashboard_frame, text=f"السرعة الحالية: {self.current_speed:.1f} كم/س", font=("Helvetica", 14))
+        self.lbl_speed.pack()
 
-with col2:
-    st.metric(label="السرعة الحالية", value=f"{st.session_state.speed:.1f} كم/س")
+        # منطقة عرض التحكم اليدوي
+        controls_frame = ttk.LabelFrame(root, text="أزرار التحكم اليدوي", padding=10)
+        controls_frame.pack(fill="x", padx=20, pady=10)
 
-with col3:
-    # تحديد الحالة بناءً على المدخلات
-    car_status = "متوقفة 🛑"
-    if st.session_state.throttle_input > 0:
-        car_status = "تتسارع 🚀"
-    elif st.session_state.brake_input > 0:
-        car_status = "فرملة ⚠️"
-    elif st.session_state.speed > 0:
-        car_status = "تسير 🛣️"
-    st.metric(label="حالة السيارة", value=car_status)
+        # مؤشر البنزين
+        self.pbar_throttle = ttk.Progressbar(controls_frame, orient="horizontal", mode="determinate", maximum=100)
+        self.pbar_throttle.pack(pady=5, fill="x")
+        lbl_throttle = ttk.Label(controls_frame, text="مسرع اليد (اضغط A)")
+        lbl_throttle.pack()
 
-# مؤشرات بصرية لقوة الضغط
-st.write("مستوى مسرع اليد:")
-st.progress(min(st.session_state.throttle_input * 10, 100)) # ضرب في 10 للتناسب
+        # مؤشر الفرامل
+        self.pbar_brake = ttk.Progressbar(controls_frame, orient="horizontal", mode="determinate", maximum=100)
+        self.pbar_brake.pack(pady=5, fill="x")
+        lbl_brake = ttk.Label(controls_frame, text="فرامل اليد (اضغط S)")
+        lbl_brake.pack()
 
-st.write("مستوى فرامل اليد:")
-st.progress(min(st.session_state.brake_input * 10, 100))
+        # تعليمات
+        ttk.Label(root, text="استخدم الأزرار A (للتسريع) و S (للفرملة) للتحكم بالسرعة.", font=("Helvetica", 10, "italic")).pack(pady=10)
 
-st.markdown("---")
+        # --- ربط الأحداث (Event Binding) ---
+        # ربط الضغط على الأزرار بالكيبورد
+        self.root.bind('<KeyPress-a>', self.press_throttle)
+        self.root.bind('<KeyRelease-a>', self.release_throttle)
+        self.root.bind('<KeyPress-s>', self.press_brake)
+        self.root.bind('<KeyRelease-s>', self.release_brake)
 
-# --- لوحة التحكم اليدوية (باستخدام المُنزلقات - Sliders) ---
-st.subheader("🎮 لوحة التحكم التفاعلية")
-st.write("اسحبي المؤشرات بيدك (بالماوس أو اللمس):")
+        # بدء حلقة المحاكاة
+        self.root.after(100, self.update_simulation) # تحديث كل 100 مللي ثانية
 
-# 1. تحكم التوجيه (الدركسون) - مُنزلق أفقي
-# label: الاسم الظاهر
-# min_value: أقصى يسار (-100)
-# max_value: أقصى يمين (+100)
-# value: القيمة الافتراضية الحالية
-# step: مقدار القفزة عند التحريك (5 درجات)
-st.session_state.steering_angle = st.slider(
-    "↩️ تحكم الدركسون (يسار/يمين)",
-    min_value=-100,
-    max_value=100,
-    value=st.session_state.steering_angle,
-    step=5
-)
+    # --- منطق المحاكاة ---
 
-st.write("") # مسافة فارغة
+    def press_throttle(self, event):
+        """محاكاة الضغط على مسرع اليد"""
+        self.throttle_value = min(self.throttle_value + 10, 100) # زيادة القوة تدريجياً
+        self.pbar_throttle['value'] = self.throttle_value
+        # منع الفرملة أثناء التسريع (منطق أمان مبدئي)
+        if self.brake_value > 0:
+            self.brake_value = 0
+            self.pbar_brake['value'] = 0
 
-# 2. تحكم التسارع (مسرع اليد) - مُنزلق عمودي (اختياري vertical=True ليعطي إحساس المقبض)
-# ملاحظة: المُنزلقات العمودية في Streamlit تتطلب نسخة حديثة، إذا لم تعمل، احذفي argument: vertical=True
-st.session_state.throttle_input = st.slider(
-    "🚀 مسرع اليد (Throttle)",
-    min_value=0,
-    max_value=10,
-    value=st.session_state.throttle_input,
-    step=1,
-    #help="اسحبي للأعلى لزيادة السرعة",
-    #vertical=True # قد يحتاج Streamlit حديث
-)
+    def release_throttle(self, event):
+        """محاكاة رفع اليد عن المسرع"""
+        # قد تختلف الاستراتيجية: هل السرعة تثبت أم تبدأ بالتباطؤ؟ سنعتبرها تثبت الآن.
+        # self.throttle_value = 0
+        # self.pbar_throttle['value'] = 0
+        pass # يمكن تطبيق تباطؤ هنا
 
-# 3. تحكم الفرامل (فرامل اليد) - مُنزلق عمودي
-st.session_state.brake_input = st.slider(
-    "🛑 فرملة اليد (Brake)",
-    min_value=0,
-    max_value=10,
-    value=st.session_state.brake_input,
-    step=1,
-    #vertical=True
-)
+    def press_brake(self, event):
+        """محاكاة الضغط على فرامل اليد"""
+        self.brake_value = min(self.brake_value + 20, 100) # فرملة أسرع من التسارع
+        self.pbar_brake['value'] = self.brake_value
+        # تقليل قوة التسريع عند الفرملة
+        if self.throttle_value > 0:
+            self.throttle_value = max(0, self.throttle_value - 30)
+            self.pbar_throttle['value'] = self.throttle_value
 
-# --- منطق حساب الحركة (Physics Logic) ---
-# يتم تحديث القيم بناءً على مكان المُنزلقات عند عمل rerun
+    def release_brake(self, event):
+        """محاكاة رفع اليد عن الفرامل"""
+        # self.brake_value = 0
+        # self.pbar_brake['value'] = 0
+        pass # يمكن تطبيق تباطؤ هنا
 
-# أولوية الأمان: إذا تم الضغط على الفرامل، يلغى البنزين
-if st.session_state.brake_input > 0:
-    # فرملة قوية
-    speed_change = - (st.session_state.brake_input * 6.0)
-    st.session_state.throttle_input = 0 # إيقاف البنزين تلقائياً
-else:
-    # تسارع عادي بناءً على قيمة المسرع
-    speed_change = st.session_state.throttle_input * 2.5
+    def update_simulation(self):
+        """الحلقة الرئيسية لتحديث حالة السيارة الافتراضية"""
+        if not self.is_running: return
 
-# التحديث النهائي للسرعة مع حدود (0 إلى 180)
-st.session_state.speed = max(0.0, min(180.0, st.session_state.speed + speed_change))
+        # منطق حساب سرعة السيارة بناءً على الأوامر اليدوية
+        
+        # التسارع (زيادة السرعة)
+        if self.throttle_value > 0:
+            self.current_speed = min(self.current_speed + (self.throttle_value * 0.5), self.max_speed)
+        
+        # الفرملة (نقصان السرعة)
+        if self.brake_value > 0:
+            self.current_speed = max(0, self.current_speed - (self.brake_value * 1.5))
+            
+        # التباطؤ الطبيعي (مثلاً بسبب مقاومة الهواء والاحتكاك عند رفع اليد)
+        # إذا لم يكن هناك تسارع أو فرملة، تبطئ السيارة ببطء
+        if self.throttle_value == 0 and self.brake_value == 0 and self.current_speed > 0:
+            self.current_speed = max(0, self.current_speed - 1.0)
 
-# التباطؤ الطبيعي البسيط إذا لم يتم الضغط على شيء
-if st.session_state.throttle_input == 0 and st.session_state.brake_input == 0:
-    st.session_state.speed = max(0.0, st.session_state.speed - 1.0)
+        # تحديث واجهة المستخدم
+        self.lbl_speed.config(text=f"السرعة الحالية: {self.current_speed:.1f} كم/س")
+        
+        # نداء الدالة مرة أخرى بعد 100 مللي ثانية
+        self.root.after(100, self.update_simulation)
 
-
-# زر لتحديث المحاكاة (اختياري مع وجود السلايدرات، لكن مفيد لضمان التحديث)
-st.write("")
-if st.button("تحديث الحركة الآن", use_container_width=True):
-    st.rerun()
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = CarSimulator(root)
+    root.mainloop()
