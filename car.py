@@ -1,119 +1,116 @@
-import tkinter as tk
-from tkinter import ttk
+import streamlit as st
 
-class CarSimulator:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("نموذج محاكاة نظام قيادة يدوي")
-        self.root.geometry("500x450")
+# إعدادات الصفحة
+st.set_page_config(page_title="محاكاة دركسون القيادة اليدوية", page_icon="🚗", layout="centered")
 
-        self.current_speed = 0.0
-        self.max_speed = 200.0
-        self.throttle_value = 0.0
-        self.brake_value = 0.0
-        self.is_running = True
+st.title("🚗 محاكاة نظام القيادة باليد (Drive-by-Wire)")
+st.write("تصميم تفاعلي مستوحى من شكل المقود والأذرع الداخلية للتحكم الكامل.")
 
-        # --- عناصر الواجهة ---
+# تهيئة متغيرات الحالة
+if 'speed' not in st.session_state:
+    st.session_state.speed = 0.0
+if 'steering_angle' not in st.session_state:
+    st.session_state.steering_angle = 0  # زاوية التوجيه
+if 'throttle' not in st.session_state:
+    st.session_state.throttle = 0
+if 'brake' not in st.session_state:
+    st.session_state.brake = 0
+
+# --- لوحة العدادات العلوية ---
+st.markdown("---")
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric(label="السرعة", value=f"{st.session_state.speed:.1f} كم/س")
+
+with col2:
+    st.metric(label="زاوية المقود", value=f"{st.session_state.steering_angle}°")
+
+with col3:
+    status = "متوقفة 🛑"
+    if st.session_state.throttle > 0:
+        status = "تتسارع 🚀"
+    elif st.session_state.brake > 0:
+        status = "فرملة ⚠️"
+    st.metric(label="الحالة", value=status)
+
+st.markdown("---")
+
+# --- تمثيل الدركسون البصري التفاعلي (مستوحى من الرسمة) ---
+st.subheader("🎮 المقود التفاعلي (Steering Wheel)")
+
+# استخدام مكون HTML/SVG لرسم الدركسون بشكل مطابق لرسمتك (دائرة خارجية وأذرع متصلة بالمنتصف)
+steering_svg = f"""
+<div style="display: flex; justify-content: center; align-items: center; margin: 20px 0;">
+    <svg width="220" height="220" viewBox="0 0 200 200" style="transform: rotate({st.session_state.steering_angle}deg); transition: transform 0.1s ease;">
+        <!-- الإطار الخارجي للدركسون -->
+        <circle cx="100" cy="100" r="85" fill="none" stroke="#2c3e50" stroke-width="16" />
+        <circle cx="100" cy="100" r="73" fill="none" stroke="#34495e" stroke-width="2" stroke-dasharray="4,4" />
         
-        # عنوان
-        lbl_title = ttk.Label(root, text="لوحة تحكم القيادة اليدوية (Drive-by-Wire)", font=("Helvetica", 16, "bold"))
-        lbl_title.pack(pady=15)
-
-        # منطقة عرض السرعة (Dashboard)
-        dashboard_frame = ttk.LabelFrame(root, text="معلومات السيارة", padding=10)
-        dashboard_frame.pack(fill="x", padx=20, pady=10)
-
-        self.lbl_speed = ttk.Label(dashboard_frame, text=f"السرعة الحالية: {self.current_speed:.1f} كم/س", font=("Helvetica", 14))
-        self.lbl_speed.pack()
-
-        # منطقة عرض التحكم اليدوي
-        controls_frame = ttk.LabelFrame(root, text="أزرار التحكم اليدوي", padding=10)
-        controls_frame.pack(fill="x", padx=20, pady=10)
-
-        # مؤشر البنزين
-        self.pbar_throttle = ttk.Progressbar(controls_frame, orient="horizontal", mode="determinate", maximum=100)
-        self.pbar_throttle.pack(pady=5, fill="x")
-        lbl_throttle = ttk.Label(controls_frame, text="مسرع اليد (اضغط A)")
-        lbl_throttle.pack()
-
-        # مؤشر الفرامل
-        self.pbar_brake = ttk.Progressbar(controls_frame, orient="horizontal", mode="determinate", maximum=100)
-        self.pbar_brake.pack(pady=5, fill="x")
-        lbl_brake = ttk.Label(controls_frame, text="فرامل اليد (اضغط S)")
-        lbl_brake.pack()
-
-        # تعليمات
-        ttk.Label(root, text="استخدم الأزرار A (للتسريع) و S (للفرملة) للتحكم بالسرعة.", font=("Helvetica", 10, "italic")).pack(pady=10)
-
-        # --- ربط الأحداث (Event Binding) ---
-        # ربط الضغط على الأزرار بالكيبورد
-        self.root.bind('<KeyPress-a>', self.press_throttle)
-        self.root.bind('<KeyRelease-a>', self.release_throttle)
-        self.root.bind('<KeyPress-s>', self.press_brake)
-        self.root.bind('<KeyRelease-s>', self.release_brake)
-
-        # بدء حلقة المحاكاة
-        self.root.after(100, self.update_simulation) # تحديث كل 100 مللي ثانية
-
-    # --- منطق المحاكاة ---
-
-    def press_throttle(self, event):
-        """محاكاة الضغط على مسرع اليد"""
-        self.throttle_value = min(self.throttle_value + 10, 100) # زيادة القوة تدريجياً
-        self.pbar_throttle['value'] = self.throttle_value
-        # منع الفرملة أثناء التسريع (منطق أمان مبدئي)
-        if self.brake_value > 0:
-            self.brake_value = 0
-            self.pbar_brake['value'] = 0
-
-    def release_throttle(self, event):
-        """محاكاة رفع اليد عن المسرع"""
-        # قد تختلف الاستراتيجية: هل السرعة تثبت أم تبدأ بالتباطؤ؟ سنعتبرها تثبت الآن.
-        # self.throttle_value = 0
-        # self.pbar_throttle['value'] = 0
-        pass # يمكن تطبيق تباطؤ هنا
-
-    def press_brake(self, event):
-        """محاكاة الضغط على فرامل اليد"""
-        self.brake_value = min(self.brake_value + 20, 100) # فرملة أسرع من التسارع
-        self.pbar_brake['value'] = self.brake_value
-        # تقليل قوة التسريع عند الفرملة
-        if self.throttle_value > 0:
-            self.throttle_value = max(0, self.throttle_value - 30)
-            self.pbar_throttle['value'] = self.throttle_value
-
-    def release_brake(self, event):
-        """محاكاة رفع اليد عن الفرامل"""
-        # self.brake_value = 0
-        # self.pbar_brake['value'] = 0
-        pass # يمكن تطبيق تباطؤ هنا
-
-    def update_simulation(self):
-        """الحلقة الرئيسية لتحديث حالة السيارة الافتراضية"""
-        if not self.is_running: return
-
-        # منطق حساب سرعة السيارة بناءً على الأوامر اليدوية
+        <!-- الأذرع الداخلية الثلاثة (مطابقة لرسمتك) -->
+        <!-- الذراع الأيسر العلوي -->
+        <line x1="100" y1="100" x2="35" y2="70" stroke="#2c3e50" stroke-width="12" stroke-linecap="round" />
+        <!-- الذراع الأيمن العلوي -->
+        <line x1="100" y1="100" x2="165" y2="70" stroke="#2c3e50" stroke-width="12" stroke-linecap="round" />
+        <!-- الذراع السفلي -->
+        <line x1="100" y1="100" x2="100" y2="165" stroke="#2c3e50" stroke-width="12" stroke-linecap="round" />
         
-        # التسارع (زيادة السرعة)
-        if self.throttle_value > 0:
-            self.current_speed = min(self.current_speed + (self.throttle_value * 0.5), self.max_speed)
-        
-        # الفرملة (نقصان السرعة)
-        if self.brake_value > 0:
-            self.current_speed = max(0, self.current_speed - (self.brake_value * 1.5))
-            
-        # التباطؤ الطبيعي (مثلاً بسبب مقاومة الهواء والاحتكاك عند رفع اليد)
-        # إذا لم يكن هناك تسارع أو فرملة، تبطئ السيارة ببطء
-        if self.throttle_value == 0 and self.brake_value == 0 and self.current_speed > 0:
-            self.current_speed = max(0, self.current_speed - 1.0)
+        <!-- الدائرة المركزية (المنصفة) -->
+        <circle cx="100" cy="100" r="28" fill="#1abc9c" stroke="#16a085" stroke-width="4" />
+        <text x="100" y="105" font-size="12" fill="white" font-weight="bold" text-anchor="middle" dominant-baseline="middle">AI</text>
+    </svg>
+</div>
+"""
+st.markdown(steering_svg, unsafe_allow_html=True)
 
-        # تحديث واجهة المستخدم
-        self.lbl_speed.config(text=f"السرعة الحالية: {self.current_speed:.1f} كم/س")
-        
-        # نداء الدالة مرة أخرى بعد 100 مللي ثانية
-        self.root.after(100, self.update_simulation)
+# --- أدوات التحكم (المنزلقات للدركسون والبنزين والفرامل) ---
+st.write("### لوحة تحكم المقبض والدواسات الافتراضية:")
 
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = CarSimulator(root)
-    root.mainloop()
+# تحكم الدركسون (تدوير يمين ويسار)
+st.session_state.steering_angle = st.slider(
+    "🔄 تدوير المقود (يسار / يمين)",
+    min_value=-90,
+    max_value=90,
+    value=st.session_state.steering_angle,
+    step=10
+)
+
+col_ctrl1, col_ctrl2 = st.columns(2)
+
+with col_ctrl1:
+    st.session_state.throttle = st.slider(
+        "🚀 ضغط مسرع اليد",
+        min_value=0,
+        max_value=100,
+        value=st.session_state.throttle,
+        step=10
+    )
+
+with col_ctrl2:
+    st.session_state.brake = st.slider(
+        "🛑 ضغط فرملة اليد",
+        min_value=0,
+        max_value=100,
+        value=st.session_state.brake,
+        step=10
+    )
+
+# --- منطق حساب السرعة والحركة ---
+if st.session_state.brake > 0:
+    # الفرملة تلغي البنزين وتبطئ السيارة بسرعة
+    st.session_state.throttle = 0
+    speed_delta = - (st.session_state.brake * 0.4)
+else:
+    speed_delta = st.session_state.throttle * 0.15
+
+# تحديث السرعة النهائية
+st.session_state.speed = max(0.0, min(160.0, st.session_state.speed + speed_delta))
+
+# تباطؤ طبيعي إذا تم ترك الأزرار
+if st.session_state.throttle == 0 and st.session_state.brake == 0:
+    st.session_state.speed = max(0.0, st.session_state.speed - 1.5)
+
+# زر لتحديث الشاشة يدوي عند الحاجة
+st.write("")
+if st.button("تحديث حالة المحاكاة", use_container_width=True):
+    st.rerun()
