@@ -1,97 +1,120 @@
 import streamlit as st
 
-st.set_page_config(page_title="محاكاة نظام القيادة باليد", page_icon="🚗", layout="centered")
+# إعدادات الصفحة
+st.set_page_config(page_title="محاكاة القيادة باليد المتقدمة", page_icon="🚗", layout="centered")
 
-st.title("🚗 محاكاة نظام القيادة باليد (Drive-by-Wire)")
-st.write("مشروع استبدال الدواسات التقليدية بأزرار تحكم ومقابض خلف الدركسون مع نظام التوجيه.")
+st.title("🚗 محاكاة نظام القيادة اليدوية (Drive-by-Wire)")
+st.write("استخدمي المُنزلقات (Sliders) بالأسفل للتحكم في السيارة كأنك تمسكين المقود بيدك.")
 
 # تهيئة المتغيرات في حالة الجلسة (Session State)
 if 'speed' not in st.session_state:
     st.session_state.speed = 0.0
 if 'steering_angle' not in st.session_state:
-    st.session_state.steering_angle = 0  # من -45 (يسار) إلى +45 (يمين)
-if 'throttle' not in st.session_state:
-    st.session_state.throttle = 0
-if 'brake' not in st.session_state:
-    st.session_state.brake = 0
+    st.session_state.steering_angle = 0  # من -100 (يسار) إلى +100 (يمين)
+if 'throttle_input' not in st.session_state:
+    st.session_state.throttle_input = 0 # قيمة منزلق البنزين
+if 'brake_input' not in st.session_state:
+    st.session_state.brake_input = 0 # قيمة منزلق الفرامل
 
-# --- لوحة العدادات والمعلومات ---
+# --- لوحة العدادات ---
 st.markdown("---")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.metric(label="السرعة الحالية", value=f"{st.session_state.speed:.1f} كم/س")
+    # تحويل قيمة زاوية الدركسون لعرضها كنص
+    steer_display = "مستقيم ⬆️"
+    if st.session_state.steering_angle < 0:
+        steer_display = f"⬅️ يسار ({abs(st.session_state.steering_angle)})"
+    elif st.session_state.steering_angle > 0:
+        steer_display = f"➡️ يمين ({st.session_state.steering_angle})"
+    st.metric(label="وضعية الدركسون", value=steer_display)
 
 with col2:
-    # اتجاه الدركسون
-    steer_text = "مستقيم ⬆️"
-    if st.session_state.steering_angle < 0:
-        steer_text = f"يسار ⬅️ ({abs(st.session_state.steering_angle)}°)"
-    elif st.session_state.steering_angle > 0:
-        steer_text = f"يمين ➡️ ({st.session_state.steering_angle}°)"
-    st.metric(label="وضع الدركسون", value=steer_text)
+    st.metric(label="السرعة الحالية", value=f"{st.session_state.speed:.1f} كم/س")
 
 with col3:
-    status = "متوقفة 🛑"
-    if st.session_state.speed > 0 and st.session_state.brake == 0:
-        status = "تتسارع 🚀"
-    elif st.session_state.brake > 0:
-        status = "فرملة ⚠️"
-    st.metric(label="حالة السيارة", value=status)
+    # تحديد الحالة بناءً على المدخلات
+    car_status = "متوقفة 🛑"
+    if st.session_state.throttle_input > 0:
+        car_status = "تتسارع 🚀"
+    elif st.session_state.brake_input > 0:
+        car_status = "فرملة ⚠️"
+    elif st.session_state.speed > 0:
+        car_status = "تسير 🛣️"
+    st.metric(label="حالة السيارة", value=car_status)
 
-# مؤشرات بصرية لمستوى الضغط
-st.write("مستوى مسرع اليد (Throttle):")
-st.progress(st.session_state.throttle)
+# مؤشرات بصرية لقوة الضغط
+st.write("مستوى مسرع اليد:")
+st.progress(min(st.session_state.throttle_input * 10, 100)) # ضرب في 10 للتناسب
 
-st.write("مستوى فرامل اليد (Brake):")
-st.progress(st.session_state.brake)
+st.write("مستوى فرامل اليد:")
+st.progress(min(st.session_state.brake_input * 10, 100))
 
 st.markdown("---")
 
-# --- لوحة التحكم باليد (أزرار تفاعلية) ---
-st.subheader("🎮 لوحة التحكم (الدركسون والأزرار)")
+# --- لوحة التحكم اليدوية (باستخدام المُنزلقات - Sliders) ---
+st.subheader("🎮 لوحة التحكم التفاعلية")
+st.write("اسحبي المؤشرات بيدك (بالماوس أو اللمس):")
 
-# تحكم الدركسون (يمين ويسار)
-st.text("توجيه الدركسون:")
-col_s1, col_s2, col_s3 = st.columns(3)
-with col_s1:
-    if st.button("⬅️ لفة يسار", use_container_width=True):
-        st.session_state.steering_angle = max(st.session_state.steering_angle - 15, -45)
-        st.rerun()
-with col_s2:
-    if st.button("⬆️ تعديل الدركسون", use_container_width=True):
-        st.session_state.steering_angle = 0
-        st.rerun()
-with col_s3:
-    if st.button("➡️ لفة يمين", use_container_width=True):
-        st.session_state.steering_angle = min(st.session_state.steering_angle + 15, 45)
-        st.rerun()
+# 1. تحكم التوجيه (الدركسون) - مُنزلق أفقي
+# label: الاسم الظاهر
+# min_value: أقصى يسار (-100)
+# max_value: أقصى يمين (+100)
+# value: القيمة الافتراضية الحالية
+# step: مقدار القفزة عند التحريك (5 درجات)
+st.session_state.steering_angle = st.slider(
+    "↩️ تحكم الدركسون (يسار/يمين)",
+    min_value=-100,
+    max_value=100,
+    value=st.session_state.steering_angle,
+    step=5
+)
 
+st.write("") # مسافة فارغة
+
+# 2. تحكم التسارع (مسرع اليد) - مُنزلق عمودي (اختياري vertical=True ليعطي إحساس المقبض)
+# ملاحظة: المُنزلقات العمودية في Streamlit تتطلب نسخة حديثة، إذا لم تعمل، احذفي argument: vertical=True
+st.session_state.throttle_input = st.slider(
+    "🚀 مسرع اليد (Throttle)",
+    min_value=0,
+    max_value=10,
+    value=st.session_state.throttle_input,
+    step=1,
+    #help="اسحبي للأعلى لزيادة السرعة",
+    #vertical=True # قد يحتاج Streamlit حديث
+)
+
+# 3. تحكم الفرامل (فرامل اليد) - مُنزلق عمودي
+st.session_state.brake_input = st.slider(
+    "🛑 فرملة اليد (Brake)",
+    min_value=0,
+    max_value=10,
+    value=st.session_state.brake_input,
+    step=1,
+    #vertical=True
+)
+
+# --- منطق حساب الحركة (Physics Logic) ---
+# يتم تحديث القيم بناءً على مكان المُنزلقات عند عمل rerun
+
+# أولوية الأمان: إذا تم الضغط على الفرامل، يلغى البنزين
+if st.session_state.brake_input > 0:
+    # فرملة قوية
+    speed_change = - (st.session_state.brake_input * 6.0)
+    st.session_state.throttle_input = 0 # إيقاف البنزين تلقائياً
+else:
+    # تسارع عادي بناءً على قيمة المسرع
+    speed_change = st.session_state.throttle_input * 2.5
+
+# التحديث النهائي للسرعة مع حدود (0 إلى 180)
+st.session_state.speed = max(0.0, min(180.0, st.session_state.speed + speed_change))
+
+# التباطؤ الطبيعي البسيط إذا لم يتم الضغط على شيء
+if st.session_state.throttle_input == 0 and st.session_state.brake_input == 0:
+    st.session_state.speed = max(0.0, st.session_state.speed - 1.0)
+
+
+# زر لتحديث المحاكاة (اختياري مع وجود السلايدرات، لكن مفيد لضمان التحديث)
 st.write("")
-
-# تحكم التسارع والفرامل
-col_btn1, col_btn2, col_btn3 = st.columns(3)
-
-with col_btn1:
-    if st.button("🚀 ضغط مسرع اليد (+)", use_container_width=True):
-        st.session_state.throttle = min(st.session_state.throttle + 25, 100)
-        st.session_state.brake = 0
-        st.session_state.speed = min(st.session_state.speed + 15.0, 180.0)
-        st.rerun()
-
-with col_btn2:
-    if st.button("🛑 فرملة اليد طارئة", use_container_width=True):
-        st.session_state.brake = 100
-        st.session_state.throttle = 0
-        st.session_state.speed = max(0.0, st.session_state.speed - 50.0)
-        st.rerun()
-
-with col_btn3:
-    if st.button("🔄 تحرير الأزرار", use_container_width=True):
-        st.session_state.throttle = 0
-        st.session_state.brake = 0
-        st.rerun()
-
-# التباطؤ الطبيعي عند عدم الضغط
-if st.session_state.throttle == 0 and st.session_state.brake == 0 and st.session_state.speed > 0:
-    st.session_state.speed = max(0.0, st.session_state.speed - 3.0)
+if st.button("تحديث الحركة الآن", use_container_width=True):
+    st.rerun()
